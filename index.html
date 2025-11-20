@@ -2,356 +2,61 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Torneio de Robôs — Double Elimination (40)</title>
+  <title>Torneio de Robôs — Google Sheets Sync</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { margin:0; font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; }
-    header { padding:12px 20px; background:#111827; color:#38bdf8; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; }
-    main { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:20px; }
-    .panel { background:#1f2937; padding:12px; border-radius:8px; }
-    .round { margin-bottom:20px; }
-    .round h3 { margin:6px 0 10px; color:#9ca3af; }
-    .match { background:#374151; margin:6px 0; padding:8px; border-radius:6px; }
-    .row { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-    .team { display:flex; justify-content:space-between; width:100%; }
-    .team .name { font-weight:600; }
-    .team.win { outline:1px solid #22c55e; border-radius:6px; }
-    .team.lose { outline:1px solid #ef4444; border-radius:6px; opacity:.9; }
-    .meta { font-size:12px; color:#9ca3af; margin-top:6px; display:flex; justify-content:space-between; }
-    .edit-row { display:none; margin-top:8px; gap:8px; grid-template-columns: 1.4fr 1fr 1fr; }
-    .match.admin .edit-row { display:grid; }
-    input, button { border-radius:6px; border:1px solid #475569; background:#111827; color:#e5e7eb; padding:6px 8px; }
-    button { cursor:pointer; }
-    button.danger { background:#ef4444; border-color:#ef4444; color:#fff; }
-    .tag { font-size:11px; padding:2px 6px; border-radius:999px; background:#0b2a35; color:#7dd3fc; border:1px solid #0e3b4b; }
-    @media (max-width: 900px) { main { grid-template-columns:1fr; } }
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; padding:20px; }
+    h1 { color:#38bdf8; }
+    .match { background:#1f2937; margin:10px 0; padding:10px; border-radius:6px; }
+    .row { display:flex; justify-content:space-between; }
+    .winner { color:#22c55e; font-weight:bold; }
   </style>
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
-  <header>
-    <div>
-      <h1 style="margin:0;">Torneio de Robôs — Double Elimination</h1>
-      <div style="font-size:12px;color:#9ca3af;">Linhares/ES • Fuso América/São Paulo (BRT)</div>
-    </div>
-    <div>
-      <button id="toggleAdmin"></button>
-      <button id="resetBtn" class="danger">Resetar</button>
-    </div>
-  </header>
-
-  <main>
-    <section class="panel">
-      <h2>Chave dos vencedores</h2>
-      <div id="wBracket"></div>
-    </section>
-    <section class="panel">
-      <h2>Chave dos perdedores</h2>
-      <div id="lBracket"></div>
-    </section>
-    <section class="panel">
-      <h2>Agenda</h2>
-      <div id="agenda"></div>
-    </section>
-    <section class="panel">
-      <h2>Participantes</h2>
-      <div id="participantsGrid"></div>
-    </section>
-  </main>
+  <h1>Torneio de Robôs — Atualizado pelo Google Sheets</h1>
+  <div id="matches">Carregando lutas...</div>
 
 <script>
-const TIMEZONE = 'America/Sao_Paulo';
+const SHEET_ID = "1FD1OLXl_OHg7KAOP1ksviNWIvtf_UNz9NntjUhAZ5X8"; // <-- troque pelo ID da sua planilha
+const RANGE = "A2:G100"; // ajusta conforme o tamanho da sua tabela
 
-const names = [
-  "Gambiarra","Marreco","Milkshake","Teimoso","Aton","Blu","CC","Sentinela M4L1",
-  "ZEUS","Bombinha","Bulbabot","Don Sapingo","Byteman","Gambiarra2","O Tênis","Pantherman",
-  "Alpha","Vozão","Trembolona","Ímola","Mula Preta","Créuzinho","MM","ARCZERO",
-  "Hunter²","Marisa","Mariana","Megazord","Taurus","Zote","Docinho","Mecaniota",
-  "Nexage","Vira-Lata","CJ","Pikachu","GWD","Bitelo","Catarro","ChuteGPT"
-];
-
-// participantes com IDs únicos, mesmo com nomes repetidos
-function makeParticipants() {
-  return names.map((name, i) => ({ id: 'P'+(i+1), name, seed: i+1, losses: 0 }));
+function loadSheet() {
+  const query = new google.visualization.Query(
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=Sheet1&range=${RANGE}`
+  );
+  query.send(handleResponse);
 }
 
-let state = JSON.parse(localStorage.getItem('bracket40_v2')) || null;
-function save() { localStorage.setItem('bracket40_v2', JSON.stringify(state)); }
-function isAdmin() { return location.hash === '#admin'; }
-
-let matchCounter = 0;
-function newMatch(bracket, round, a=null, b=null) {
-  const id = `${bracket}${round}-${(++matchCounter)}`;
-  const m = { id, bracket, round, a, b, scoreA:null, scoreB:null, winner:null, scheduledAt:null, nextWin:null, nextLose:null };
-  state.matches[id] = m; return m;
-}
-
-// construção double-elim: 40 -> preliminar (8 matches) -> 32
-function reset() {
-  state = { participants: makeParticipants(), matches: {}, rounds: { winners: [], losers: [] }, final: null, finalReset: null };
-  build();
-  save(); renderAll();
-}
-
-function build() {
-  const parts = state.participants;
-  const byes = parts.slice(0,24);
-  const prelim = parts.slice(24); // 16 participantes => 8 matches
-  const W0 = []; for (let i=0; i<16; i+=2) W0.push(newMatch('W', 0, prelim[i], prelim[i+1]));
-
-  // Winners R1 (32): 24 byes + 8 vencedores da prelim
-  const W1 = [];
-  const winnersSeeds = [...byes]; // 24
-  let idx=0;
-  for (let i=0; i<16; i++) {
-    let a=null, b=null;
-    if (i<12) { a = winnersSeeds[idx++]; b = winnersSeeds[idx++]; }
-    else {
-      a = winnersSeeds[idx++]; b = { placeholder:true, from:{ bracket:'W', round:0, index:(i-12) } };
-    }
-    W1.push(newMatch('W',1,a,b));
+function handleResponse(response) {
+  if (response.isError()) {
+    document.getElementById("matches").innerHTML = "Erro ao carregar planilha.";
+    return;
   }
+  const data = response.getDataTable();
+  let html = "";
+  for (let i = 0; i < data.getNumberOfRows(); i++) {
+    const roboA = data.getValue(i,1);
+    const placarA = data.getValue(i,2);
+    const roboB = data.getValue(i,3);
+    const placarB = data.getValue(i,4);
+    const horario = data.getValue(i,5);
+    const vencedor = data.getValue(i,6);
 
-  // conectar vitórias de W0 para W1 slots B dos últimos 4 matches (12..15)
-  W0.forEach((m,i) => { m.nextWin = { bracket:'W', round:1, index:12+i, slot:2 }; m.nextLose = { bracket:'L', round:1, index:i, slot:(i%2?2:1) }; });
-
-  // rounds seguintes na winners
-  const W2 = makeNextRound('W',2, W1.length/2);
-  const W3 = makeNextRound('W',3, W2.length/2);
-  const W4 = makeNextRound('W',4, W3.length/2);
-  const W5 = makeNextRound('W',5, W4.length/2);
-
-  connectWins(W1,W2); connectWins(W2,W3); connectWins(W3,W4); connectWins(W4,W5);
-
-  // losers rounds (estrutura suficiente pro fluxo)
-  const L1 = makeLosersRound(1, 16);
-  const L2 = makeLosersRound(2, 16);
-  const L3 = makeLosersRound(3, 8);
-  const L4 = makeLosersRound(4, 8);
-  const L5 = makeLosersRound(5, 4);
-  const L6 = makeLosersRound(6, 4);
-  const L7 = makeLosersRound(7, 2);
-  const L8 = makeLosersRound(8, 2);
-
-  // fluxo de perdas
-  mapLosers(W0, L1);
-  mapLosers(W1, L1);
-  mapLosers(W2, L2);
-  mapLosers(W3, L3);
-  mapLosers(W4, L4);
-  mapLosers(W5, L5);
-
-  state.rounds.winners = [W0,W1,W2,W3,W4,W5];
-  state.rounds.losers = [L1,L2,L3,L4,L5,L6,L7,L8];
-
-  state.final = newMatch('F',1, { placeholder:true, from:{ bracket:'W', round:5, index:0 } },
-                              { placeholder:true, from:{ bracket:'L', round:8, index:0 } });
-  state.finalReset = newMatch('F',2,null,null);
-}
-
-function makeNextRound(bracket, roundNum, size) {
-  const arr=[]; for(let i=0;i<size;i++) arr.push(newMatch(bracket, roundNum, null, null)); return arr;
-}
-function connectWins(prev,next) {
-  for (let i=0;i<prev.length;i+=2) {
-    const t = i/2;
-    prev[i].nextWin = { bracket: prev[i].bracket, round: prev[i].round+1, index:t, slot:1 };
-    prev[i+1].nextWin = { bracket: prev[i+1].bracket, round: prev[i+1].round+1, index:t, slot:2 };
+    html += `<div class="match">
+      <div class="row"><span>${roboA} (${placarA})</span> <span>${roboB} (${placarB})</span></div>
+      <div class="row"><span>Horário: ${horario}</span> <span class="winner">Vencedor: ${vencedor}</span></div>
+    </div>`;
   }
-}
-function makeLosersRound(roundNum, size) {
-  const arr=[]; for(let i=0;i<size/2;i++) arr.push(newMatch('L', roundNum, null, null)); return arr;
-}
-function mapLosers(fromRound, toRound) {
-  let ptr=0;
-  for (let i=0;i<fromRound.length;i++) {
-    const m=fromRound[i];
-    if (!toRound[ptr]) break;
-    m.nextLose = { bracket:'L', round:toRound[0].round, index:ptr, slot:(ptr%2?2:1) };
-    ptr++;
-  }
+  document.getElementById("matches").innerHTML = html;
 }
 
-// helpers
-function getByPos(bracket, round, index) {
-  if (bracket==='W') return state.rounds.winners[round]?.[index];
-  if (bracket==='L') return state.rounds.losers[round-1]?.[index];
-  if (bracket==='F') return state.final;
-  return null;
-}
-function resolvePlaceholder(ph) {
-  if (!ph || !ph.from) return null;
-  const m = getByPos(ph.from.bracket, ph.from.round, ph.from.index);
-  return m && m.winner;
-}
-function slotLabel(s) {
-  if (!s) return '—';
-  if (s.id && s.name) return s.name;
-  const w = resolvePlaceholder(s);
-  return w ? w.name : `Vencedor de ${s.from.bracket}${s.from.round}-${s.from.index+1}`;
-}
-function slotId(s) {
-  if (!s) return null;
-  if (s.id) return s.id;
-  const w = resolvePlaceholder(s);
-  return w ? w.id : null;
-}
-function fmtDate(iso) {
-  try {
-    const d = new Date(iso);
-    const opt = { timeZone: TIMEZONE, hour12:false, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' };
-    return new Intl.DateTimeFormat('pt-BR', opt).format(d);
-  } catch { return '—'; }
-}
-
-function advanceTo(target, slotVal) {
-  if (!target || !slotVal) return;
-  const m = getByPos(target.bracket, target.round, target.index);
-  if (!m) return;
-  if (target.slot===1) m.a = slotVal; else m.b = slotVal;
-}
-
-function resolveMatch(m) {
-  const aId = slotId(m.a), bId = slotId(m.b);
-  if (aId==null || bId==null) return; // precisa ter ambos definidos
-  const sA = m.scoreA, sB = m.scoreB;
-  if (sA==null || sB==null) return;
-  if (sA===sB) return; // sem empate
-
-  const winnerIsA = sA > sB;
-  m.winner = winnerIsA ? m.a : m.b;
-  const loser = winnerIsA ? m.b : m.a;
-
-  const loserP = state.participants.find(p => p.id === slotId(loser));
-  if (loserP) loserP.losses = (loserP.losses||0) + 1;
-
-  advanceTo(m.nextWin, m.winner);
-  if (loserP && loserP.losses < 2) advanceTo(m.nextLose, loser);
-
-  // final reset
-  if (m.bracket==='F' && m.round===1 && !winnerIsA) {
-    state.finalReset.a = m.b; state.finalReset.b = m.a;
-  }
-
-  save(); renderAll();
-}
-
-// RENDER
-function renderAll() {
-  document.getElementById('toggleAdmin').textContent = isAdmin() ? 'Modo admin ativo' : 'Entrar em modo admin';
-  renderBracket('wBracket', 'W', state.rounds.winners);
-  renderBracket('lBracket', 'L', state.rounds.losers);
-  renderAgenda();
-  renderParticipants();
-}
-
-function renderBracket(containerId, label, rounds) {
-  const c = document.getElementById(containerId); c.innerHTML='';
-  rounds.forEach((round, rIndex) => {
-    const rd = document.createElement('div'); rd.className='round';
-    const h = document.createElement('h3'); h.textContent = (label==='W'?'Winners ':'Losers ') + 'R' + rIndex;
-    rd.appendChild(h);
-
-    round.forEach(m => {
-      const card = document.createElement('div'); card.className = 'match' + (isAdmin()?' admin':'');
-      const teamA = document.createElement('div'); teamA.className = 'team ' + (m.winner && slotId(m.winner)===slotId(m.a) ? 'win' : (m.winner ? 'lose' : ''));
-      teamA.innerHTML = `<span class="name">${slotLabel(m.a)}</span><span>${m.scoreA ?? ''}</span>`;
-      const teamB = document.createElement('div'); teamB.className = 'team ' + (m.winner && slotId(m.winner)===slotId(m.b) ? 'win' : (m.winner ? 'lose' : ''));
-      teamB.innerHTML = `<span class="name">${slotLabel(m.b)}</span><span>${m.scoreB ?? ''}</span>`;
-      const meta = document.createElement('div'); meta.className='meta';
-      meta.innerHTML = `<span class="tag">${m.id}</span><span>${m.scheduledAt ? fmtDate(m.scheduledAt) : 'Sem horário'}</span>`;
-
-      const edit = document.createElement('div'); edit.className='edit-row';
-      edit.innerHTML = `
-        <input type="datetime-local" class="dt">
-        <input type="number" class="scoreA" placeholder="Placar ${slotLabel(m.a)}" min="0">
-        <input type="number" class="scoreB" placeholder="Placar ${slotLabel(m.b)}" min="0">
-      `;
-
-      card.appendChild(teamA); card.appendChild(teamB); card.appendChild(meta); card.appendChild(edit);
-      rd.appendChild(card);
-
-      if (isAdmin()) {
-        const dt = edit.querySelector('.dt');
-        if (m.scheduledAt) dt.value = inputValue(m.scheduledAt);
-        dt.onchange = () => { if (dt.value) { m.scheduledAt = new Date(dt.value).toISOString(); save(); renderAll(); } };
-        const sA = edit.querySelector('.scoreA'), sB = edit.querySelector('.scoreB');
-        sA.value = m.scoreA ?? ''; sB.value = m.scoreB ?? '';
-        sA.onchange = () => { m.scoreA = toInt(sA.value); resolveMatch(m); };
-        sB.onchange = () => { m.scoreB = toInt(sB.value); resolveMatch(m); };
-      }
-    });
-
-    c.appendChild(rd);
-  });
-
-  // final visível na winners
-  if (label==='W' && state.final) {
-    const rd = document.createElement('div'); rd.className='round';
-    const h = document.createElement('h3'); h.textContent = 'Grande final';
-    rd.appendChild(h);
-    const m = state.final;
-    const card = document.createElement('div'); card.className = 'match' + (isAdmin()?' admin':'');
-    const teamA = document.createElement('div'); teamA.className = 'team ' + (m.winner && slotId(m.winner)===slotId(m.a) ? 'win' : (m.winner ? 'lose' : ''));
-    teamA.innerHTML = `<span class="name">${slotLabel(m.a)}</span><span>${m.scoreA ?? ''}</span>`;
-    const teamB = document.createElement('div'); teamB.className = 'team ' + (m.winner && slotId(m.winner)===slotId(m.b) ? 'win' : (m.winner ? 'lose' : ''));
-    teamB.innerHTML = `<span class="name">${slotLabel(m.b)}</span><span>${m.scoreB ?? ''}</span>`;
-    const meta = document.createElement('div'); meta.className='meta';
-    meta.innerHTML = `<span class="tag">${m.id}</span><span>${m.scheduledAt ? fmtDate(m.scheduledAt) : 'Sem horário'}</span>`;
-    const edit = document.createElement('div'); edit.className='edit-row';
-    edit.innerHTML = `<input type="datetime-local" class="dt"><input type="number" class="scoreA" placeholder="Placar ${slotLabel(m.a)}" min="0"><input type="number" class="scoreB" placeholder="Placar ${slotLabel(m.b)}" min="0">`;
-    card.appendChild(teamA); card.appendChild(teamB); card.appendChild(meta); card.appendChild(edit);
-    rd.appendChild(card);
-    document.getElementById('wBracket').appendChild(rd);
-
-    if (isAdmin()) {
-      const dt = edit.querySelector('.dt'); if (m.scheduledAt) dt.value = inputValue(m.scheduledAt);
-      dt.onchange = () => { if (dt.value) { m.scheduledAt = new Date(dt.value).toISOString(); save(); renderAll(); } };
-      const sA = edit.querySelector('.scoreA'), sB = edit.querySelector('.scoreB');
-      sA.value = m.scoreA ?? ''; sB.value = m.scoreB ?? '';
-      sA.onchange = () => { m.scoreA = toInt(sA.value); resolveMatch(m); };
-      sB.onchange = () => { m.scoreB = toInt(sB.value); resolveMatch(m); };
-    }
-  }
-}
-
-function inputValue(iso) {
-  const d = new Date(iso);
-  const pad = n => String(n).padStart(2,'0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function toInt(v) { const n = parseInt(v); return isNaN(n)?null:n; }
-
-function renderAgenda() {
-  const c = document.getElementById('agenda'); c.innerHTML='';
-  const list = Object.values(state.matches).filter(m=>m.scheduledAt).map(m => ({
-    t: new Date(m.scheduledAt), a: slotLabel(m.a), b: slotLabel(m.b), sA: m.scoreA, sB: m.scoreB, id: m.id, bkt: m.bracket
-  })).sort((x,y)=>x.t-y.t);
-  if (!list.length) { c.textContent = 'Nenhuma luta agendada.'; return; }
-  list.forEach(it => {
-    const row = document.createElement('div'); row.className='match';
-    row.innerHTML = `<div class="row"><div><span class="tag">${it.bkt}</span> ${it.a} ${it.sA ?? ''} x ${it.sB ?? ''} ${it.b}</div><div>${fmtDate(it.t.toISOString())}</div></div>`;
-    c.appendChild(row);
-  });
-}
-
-function renderParticipants() {
-  const c = document.getElementById('participantsGrid'); c.innerHTML='';
-  state.participants.forEach(p => {
-    const row = document.createElement('div'); row.className='match';
-    row.innerHTML = `<div class="row"><div>${p.name} (Seed #${p.seed})</div><div>Derrotas: ${p.losses}</div></div>`;
-    c.appendChild(row);
-  });
-}
-
-// UI
-document.getElementById('toggleAdmin').onclick = () => { location.hash = isAdmin() ? '' : '#admin'; renderAll(); };
-document.getElementById('resetBtn').onclick = () => {
-  if (confirm('Resetar torneio? Isso apagará os dados salvos.')) { localStorage.removeItem('bracket40_v2'); reset(); }
-};
-
-// boot
-if (!state) reset(); else renderAll();
-window.addEventListener('hashchange', renderAll);
+google.charts.load('current', {'packages':['table']});
+google.charts.setOnLoadCallback(() => {
+  loadSheet();
+  // Atualiza automaticamente a cada 60 segundos
+  setInterval(loadSheet, 60000);
+});
 </script>
 </body>
 </html>
