@@ -15,7 +15,7 @@
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
-  <h1>Torneio de Robôs — Atualizado pelo Google Sheets</h1>
+  <h1>Torneio de Robôs</h1>
 
   <div id="winners">Carregando Winners...</div>
   <div id="losers">Carregando Losers...</div>
@@ -35,26 +35,40 @@ function loadSheet(sheetName, targetDiv) {
 }
 
 function handleResponse(response, targetDiv, sheetName) {
+  const container = document.getElementById(targetDiv);
+
   if (response.isError()) {
-    document.getElementById(targetDiv).innerHTML = "Erro ao carregar " + sheetName;
+    const msg = response.getMessage ? response.getMessage() : "Erro ao carregar";
+    const det = response.getDetailedMessage ? response.getDetailedMessage() : "";
+    container.innerHTML = `<h2>${sheetName}</h2><div class="match">Erro: ${msg} ${det}</div>`;
     return;
   }
+
   const data = response.getDataTable();
+  const rows = data.getNumberOfRows();
+
   let html = `<h2>${sheetName}</h2>`;
-  for (let i = 0; i < data.getNumberOfRows(); i++) {
-    const roboA = data.getValue(i,1);
+  if (rows === 0) {
+    html += `<div class="match">Ainda sem confrontos na chave ${sheetName}.</div>`;
+    container.innerHTML = html;
+    return;
+  }
+
+  for (let i = 0; i < rows; i++) {
+    const roboA   = data.getValue(i,1);
     const placarA = data.getValue(i,2);
-    const roboB = data.getValue(i,3);
+    const roboB   = data.getValue(i,3);
     const placarB = data.getValue(i,4);
     const horario = data.getValue(i,5);
-    const vencedor = data.getValue(i,6);
+    const vencedor= data.getValue(i,6);
 
     html += `<div class="match">
       <div class="row"><span>${roboA||""} (${placarA||""})</span> <span>${roboB||""} (${placarB||""})</span></div>
       <div class="row"><span>Horário: ${horario||""}</span> <span class="winner">Vencedor: ${vencedor||""}</span></div>
     </div>`;
   }
-  document.getElementById(targetDiv).innerHTML = html;
+
+  container.innerHTML = html;
 }
 
 google.charts.load('current', {'packages':['table']});
@@ -76,4 +90,3 @@ google.charts.setOnLoadCallback(() => {
 </script>
 </body>
 </html>
-
