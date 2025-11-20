@@ -2,11 +2,12 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Torneio de Robôs — Google Sheets Sync</title>
+  <title>Torneio de Robôs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; padding:20px; }
     h1 { color:#38bdf8; }
+    h2 { color:#facc15; margin-top:30px; }
     .match { background:#1f2937; margin:10px 0; padding:10px; border-radius:6px; }
     .row { display:flex; justify-content:space-between; }
     .winner { color:#22c55e; font-weight:bold; }
@@ -14,27 +15,32 @@
   <script src="https://www.gstatic.com/charts/loader.js"></script>
 </head>
 <body>
-  <h1>Batalha de Robôs - Ifes campus Linhares</h1>
-  <div id="matches">Carregando lutas...</div>
+  <h1>Torneio de Robôs — Atualizado pelo Google Sheets</h1>
+
+  <div id="winners">Carregando Winners...</div>
+  <div id="losers">Carregando Losers...</div>
+  <div id="quartas">Carregando Quartas de Final...</div>
+  <div id="semifinal">Carregando Semifinal...</div>
+  <div id="final">Carregando Final...</div>
 
 <script>
 const SHEET_ID = "1FD1OLXl_OHg7KAOP1ksviNWIvtf_UNz9NntjUhAZ5X8"; // <-- troque pelo ID da sua planilha
-const RANGE = "A2:G100"; // ajusta conforme o tamanho da sua tabela
+const RANGE = "A2:G100"; // ajuste conforme o tamanho das tabelas
 
-function loadSheet() {
+function loadSheet(sheetName, targetDiv) {
   const query = new google.visualization.Query(
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=Sheet1&range=${RANGE}`
+    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${sheetName}&range=${RANGE}`
   );
-  query.send(handleResponse);
+  query.send(response => handleResponse(response, targetDiv, sheetName));
 }
 
-function handleResponse(response) {
+function handleResponse(response, targetDiv, sheetName) {
   if (response.isError()) {
-    document.getElementById("matches").innerHTML = "Erro ao carregar planilha.";
+    document.getElementById(targetDiv).innerHTML = "Erro ao carregar " + sheetName;
     return;
   }
   const data = response.getDataTable();
-  let html = "";
+  let html = `<h2>${sheetName}</h2>`;
   for (let i = 0; i < data.getNumberOfRows(); i++) {
     const roboA = data.getValue(i,1);
     const placarA = data.getValue(i,2);
@@ -44,18 +50,28 @@ function handleResponse(response) {
     const vencedor = data.getValue(i,6);
 
     html += `<div class="match">
-      <div class="row"><span>${roboA} (${placarA})</span> <span>${roboB} (${placarB})</span></div>
-      <div class="row"><span>Horário: ${horario}</span> <span class="winner">Vencedor: ${vencedor}</span></div>
+      <div class="row"><span>${roboA||""} (${placarA||""})</span> <span>${roboB||""} (${placarB||""})</span></div>
+      <div class="row"><span>Horário: ${horario||""}</span> <span class="winner">Vencedor: ${vencedor||""}</span></div>
     </div>`;
   }
-  document.getElementById("matches").innerHTML = html;
+  document.getElementById(targetDiv).innerHTML = html;
 }
 
 google.charts.load('current', {'packages':['table']});
 google.charts.setOnLoadCallback(() => {
-  loadSheet();
+  loadSheet("Winners","winners");
+  loadSheet("Losers","losers");
+  loadSheet("Quartas de Final","quartas");
+  loadSheet("Semifinal","semifinal");
+  loadSheet("Final","final");
   // Atualiza automaticamente a cada 60 segundos
-  setInterval(loadSheet, 60000);
+  setInterval(() => {
+    loadSheet("Winners","winners");
+    loadSheet("Losers","losers");
+    loadSheet("Quartas de Final","quartas");
+    loadSheet("Semifinal","semifinal");
+    loadSheet("Final","final");
+  }, 60000);
 });
 </script>
 </body>
