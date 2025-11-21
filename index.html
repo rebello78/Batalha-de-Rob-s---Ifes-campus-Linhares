@@ -9,7 +9,9 @@
     h1 { color:#38bdf8; }
     h2 { color:#facc15; margin-top:30px; }
     .match { background:#1f2937; margin:10px 0; padding:10px; border-radius:6px; }
-    .row { display:flex; justify-content:space-between; }
+    .row { display:flex; justify-content:space-between; align-items:center; }
+    .bot { display:flex; align-items:center; }
+    .bot img { height:40px; width:40px; object-fit:cover; border-radius:50%; margin-right:8px; }
     .winner { color:#22c55e; font-weight:bold; }
   </style>
   <script src="https://www.gstatic.com/charts/loader.js"></script>
@@ -25,7 +27,7 @@
 
 <script>
 const SHEET_ID = "1FD1OLXl_OHg7KAOP1ksviNWIvtf_UNz9NntjUhAZ5X8"; // <-- troque pelo ID da sua planilha
-const RANGE = "A2:G100"; // ajuste conforme o tamanho das tabelas
+const RANGE = "A2:I100"; // agora até coluna I (Foto A/B incluídas)
 
 function loadSheet(sheetName, targetDiv) {
   const query = new google.visualization.Query(
@@ -56,14 +58,19 @@ function handleResponse(response, targetDiv, sheetName) {
 
   for (let i = 0; i < rows; i++) {
     const roboA   = data.getValue(i,1);
-    const placarA = data.getValue(i,2);
-    const roboB   = data.getValue(i,3);
-    const placarB = data.getValue(i,4);
-    const horario = data.getValue(i,5);
-    const vencedor= data.getValue(i,6);
+    const fotoA   = data.getValue(i,2);
+    const placarA = data.getValue(i,3);
+    const roboB   = data.getValue(i,4);
+    const fotoB   = data.getValue(i,5);
+    const placarB = data.getValue(i,6);
+    const horario = data.getValue(i,7);
+    const vencedor= data.getValue(i,8);
 
     html += `<div class="match">
-      <div class="row"><span>${roboA||""} (${placarA||""})</span> <span>${roboB||""} (${placarB||""})</span></div>
+      <div class="row">
+        <span class="bot"><img src="${fotoA||''}" alt=""> ${roboA||""} (${placarA||""})</span>
+        <span class="bot"><img src="${fotoB||''}" alt=""> ${roboB||""} (${placarB||""})</span>
+      </div>
       <div class="row"><span>Horário: ${horario||""}</span> <span class="winner">Vencedor: ${vencedor||""}</span></div>
     </div>`;
   }
@@ -78,7 +85,6 @@ google.charts.setOnLoadCallback(() => {
   loadSheet("Quartas de Final","quartas");
   loadSheet("Semifinal","semifinal");
   loadSheet("Final","final");
-  // Atualiza automaticamente a cada 60 segundos
   setInterval(() => {
     loadSheet("Winners","winners");
     loadSheet("Losers","losers");
