@@ -27,7 +27,7 @@
 
 <script>
 const SHEET_ID = "1FD1OLXl_OHg7KAOP1ksviNWIvtf_UNz9NntjUhAZ5X8"; // <-- troque pelo ID da sua planilha
-const RANGE = "A2:I100"; // agora até coluna I (Foto A/B incluídas)
+const RANGE = "A2:I100"; // até coluna I (Foto A/B incluídas)
 
 function loadSheet(sheetName, targetDiv) {
   const query = new google.visualization.Query(
@@ -57,21 +57,31 @@ function handleResponse(response, targetDiv, sheetName) {
   }
 
   for (let i = 0; i < rows; i++) {
-    const roboA   = data.getValue(i,1);
-    const fotoA   = data.getValue(i,2);
-    const placarA = data.getValue(i,3);
-    const roboB   = data.getValue(i,4);
-    const fotoB   = data.getValue(i,5);
-    const placarB = data.getValue(i,6);
-    const horario = data.getValue(i,7);
-    const vencedor= data.getValue(i,8);
+    // Colunas alinhadas com a planilha:
+    const roboA   = data.getValue(i,1); // B
+    const fotoA   = data.getValue(i,2); // C
+    const placarA = data.getValue(i,3); // D
+    const roboB   = data.getValue(i,4); // E
+    const fotoB   = data.getValue(i,5); // F
+    const placarB = data.getValue(i,6); // G
+    const horario = data.getValue(i,7); // H
+    const vencedor= data.getValue(i,8); // I
 
     html += `<div class="match">
       <div class="row">
-        <span class="bot"><img src="${fotoA||''}" alt=""> ${roboA||""} (${placarA||""})</span>
-        <span class="bot"><img src="${fotoB||''}" alt=""> ${roboB||""} (${placarB||""})</span>
+        <span class="bot">
+          ${fotoA ? `<img src="${fotoA}" alt="${roboA}">` : ""}
+          ${roboA||""} (${placarA||""})
+        </span>
+        <span class="bot">
+          ${fotoB ? `<img src="${fotoB}" alt="${roboB}">` : ""}
+          ${roboB||""} (${placarB||""})
+        </span>
       </div>
-      <div class="row"><span>Horário: ${horario||""}</span> <span class="winner">Vencedor: ${vencedor||""}</span></div>
+      <div class="row">
+        <span>Horário: ${horario||""}</span>
+        <span class="winner">Vencedor: ${vencedor||""}</span>
+      </div>
     </div>`;
   }
 
