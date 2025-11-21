@@ -1,92 +1,44 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <title>Torneio</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; padding:20px; }
-    h1 { color:#38bdf8; }
-    h2 { color:#facc15; margin-top:30px; }
-    .match { background:#1f2937; margin:10px 0; padding:10px; border-radius:6px; }
-    .row { display:flex; justify-content:space-between; }
-    .winner { color:#22c55e; font-weight:bold; }
-  </style>
-  <script src="https://www.gstatic.com/charts/loader.js"></script>
-</head>
-<body>
-  <h1>Torneio</h1>
+function onEdit(e) {
+  var sheet = e.source.getActiveSheet();
+  var range = e.range;
 
-  <div id="winners">Carregando Winners...</div>
-  <div id="losers">Carregando Losers...</div>
-  <div id="quartas">Carregando Quartas de Final...</div>
-  <div id="semifinal">Carregando Semifinal...</div>
-  <div id="final">Carregando Final...</div>
+  // Aba Winners → envia perdedor para Losers
+  if (sheet.getName() === "Winners" && range.getColumn() === 7) { // Coluna G = Vencedor
+    var row = range.getRow();
+    if (row < 2) return; // ignora cabeçalho
 
-<script>
-const SHEET_ID = "1FD1OLXl_OHg7KAOP1ksviNWIvtf_UNz9NntjUhAZ5X8"; // <-- troque pelo ID da sua planilha
-const RANGE = "A2:G100"; // ajuste conforme o tamanho das tabelas
+    var roboA = sheet.getRange(row, 2).getValue(); // Coluna B
+    var roboB = sheet.getRange(row, 4).getValue(); // Coluna D
+    var vencedor = sheet.getRange(row, 7).getValue(); // Coluna G
+    var perdedor = (vencedor === roboA) ? roboB : roboA;
 
-function loadSheet(sheetName, targetDiv) {
-  const query = new google.visualization.Query(
-    `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?sheet=${sheetName}&range=${RANGE}`
-  );
-  query.send(response => handleResponse(response, targetDiv, sheetName));
+    if (perdedor) {
+      var losersSheet = e.source.getSheetByName("Losers");
+      losersSheet.appendRow([row, perdedor, "", "", "", "", ""]);
+    }
+  }
+
+  // Aba Quartas → envia vencedores para Semifinal
+  if (sheet.getName() === "Quartas de Final" && range.getColumn() === 7) {
+    var row = range.getRow();
+    if (row < 2) return;
+
+    var vencedor = sheet.getRange(row, 7).getValue();
+    if (vencedor) {
+      var semiSheet = e.source.getSheetByName("Semifinal");
+      semiSheet.appendRow([row, vencedor, "", "", "", "", ""]);
+    }
+  }
+
+  // Aba Semifinal → envia vencedores para Final
+  if (sheet.getName() === "Semifinal" && range.getColumn() === 7) {
+    var row = range.getRow();
+    if (row < 2) return;
+
+    var vencedor = sheet.getRange(row, 7).getValue();
+    if (vencedor) {
+      var finalSheet = e.source.getSheetByName("Final");
+      finalSheet.appendRow([row, vencedor, "", "", "", "", ""]);
+    }
+  }
 }
-
-function handleResponse(response, targetDiv, sheetName) {
-  const container = document.getElementById(targetDiv);
-
-  if (response.isError()) {
-    const msg = response.getMessage ? response.getMessage() : "Erro ao carregar";
-    const det = response.getDetailedMessage ? response.getDetailedMessage() : "";
-    container.innerHTML = `<h2>${sheetName}</h2><div class="match">Erro: ${msg} ${det}</div>`;
-    return;
-  }
-
-  const data = response.getDataTable();
-  const rows = data.getNumberOfRows();
-
-  let html = `<h2>${sheetName}</h2>`;
-  if (rows === 0) {
-    html += `<div class="match">Ainda sem confrontos na chave ${sheetName}.</div>`;
-    container.innerHTML = html;
-    return;
-  }
-
-  for (let i = 0; i < rows; i++) {
-    const roboA   = data.getValue(i,1);
-    const placarA = data.getValue(i,2);
-    const roboB   = data.getValue(i,3);
-    const placarB = data.getValue(i,4);
-    const horario = data.getValue(i,5);
-    const vencedor= data.getValue(i,6);
-
-    html += `<div class="match">
-      <div class="row"><span>${roboA||""} (${placarA||""})</span> <span>${roboB||""} (${placarB||""})</span></div>
-      <div class="row"><span>Horário: ${horario||""}</span> <span class="winner">Vencedor: ${vencedor||""}</span></div>
-    </div>`;
-  }
-
-  container.innerHTML = html;
-}
-
-google.charts.load('current', {'packages':['table']});
-google.charts.setOnLoadCallback(() => {
-  loadSheet("Winners","winners");
-  loadSheet("Losers","losers");
-  loadSheet("Quartas de Final","quartas");
-  loadSheet("Semifinal","semifinal");
-  loadSheet("Final","final");
-  // Atualiza automaticamente a cada 60 segundos
-  setInterval(() => {
-    loadSheet("Winners","winners");
-    loadSheet("Losers","losers");
-    loadSheet("Quartas de Final","quartas");
-    loadSheet("Semifinal","semifinal");
-    loadSheet("Final","final");
-  }, 60000);
-});
-</script>
-</body>
-</html>
